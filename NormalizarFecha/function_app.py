@@ -1,7 +1,9 @@
 import azure.functions as func
 import logging
 import json
+import re
 import dateparser
+from datetime import datetime
 
 app = func.FunctionApp(http_auth_level=func.AuthLevel.FUNCTION)
 
@@ -11,6 +13,9 @@ DATEPARSER_SETTINGS = {
     'PREFER_DAY_OF_MONTH': 'first',
     'RETURN_AS_TIMEZONE_AWARE': False,
 }
+
+# Formato ISO YYYY-MM-DD: dateparser con DATE_ORDER=DMY lo malinterpreta
+_ISO_RE = re.compile(r'^\d{4}-\d{2}-\d{2}$')
 
 @app.route(route="normalizar_fecha", methods=["GET", "POST"])
 def normalizar_fecha(req: func.HttpRequest) -> func.HttpResponse:
@@ -32,7 +37,18 @@ def normalizar_fecha(req: func.HttpRequest) -> func.HttpResponse:
             mimetype="application/json"
         )
 
-    fecha_parseada = dateparser.parse(str(fecha_raw), languages=DATEPARSER_LANGUAGES, settings=DATEPARSER_SETTINGS)
+    fecha_str = str(fecha_raw).strip()
+
+    # Intentar parsear ISO YYYY-MM-DD antes que dateparser (evita malinterpretación con DMY)
+    fecha_parseada = None
+    if _ISO_RE.match(fecha_str):
+        try:
+            fecha_parseada = datetime.strptime(fecha_str, "%Y-%m-%d")
+        except ValueError:
+            pass
+
+    if fecha_parseada is None:
+        fecha_parseada = dateparser.parse(fecha_str, languages=DATEPARSER_LANGUAGES, settings=DATEPARSER_SETTINGS)
 
     if fecha_parseada is None:
         return func.HttpResponse(
