@@ -44,7 +44,7 @@ def normalizar_precio(req: func.HttpRequest) -> func.HttpResponse:
         return func.HttpResponse(precio_normalizado, status_code=200)
     else:
         return func.HttpResponse(
-            "Pasa el parámetro 'precio' en la query string o en el cuerpo JSON. "
-            "Ejemplo: ?precio=euro%20100,%2000",
-            status_code=400
+            "{}",
+            mimetype="application/json",
+            status_code=200
         )
