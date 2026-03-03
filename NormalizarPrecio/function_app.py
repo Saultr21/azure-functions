@@ -44,7 +44,7 @@ def normalizar_precio(req: func.HttpRequest) -> func.HttpResponse:
         return func.HttpResponse(precio_normalizado, status_code=200)
     else:
         return func.HttpResponse(
-            "{}",
+            "0",
             mimetype="application/json",
             status_code=200
         )
