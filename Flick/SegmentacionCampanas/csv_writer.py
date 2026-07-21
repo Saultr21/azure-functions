@@ -52,7 +52,15 @@ def _valor_campo(registro: RegistroCliente, cabecera: str) -> str:
     separador) si es texto libre."""
     nombre_campo = _MAPA_CAMPOS[cabecera]
     valor = getattr(registro, nombre_campo)
-    texto = "" if valor is None else str(valor)
+    if valor is None:
+        texto = ""
+    elif isinstance(valor, float) and valor.is_integer():
+        # Pydantic coerce enteros a float (p. ej. 5000 -> 5000.0); los Office
+        # Scripts originales manejan números JS puros y nunca añaden ".0",
+        # así que reproducimos ese formato para no romper el CSV histórico.
+        texto = str(int(valor))
+    else:
+        texto = str(valor)
     return texto.replace(";", ",")
 
 
