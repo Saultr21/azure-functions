@@ -1,0 +1,20 @@
+# Documentos confidenciales del cliente — nunca en el repo
+flick.pdf
+ExcelFlick.xlsx
+*.xlsx
+*.xls
+
+# Carpeta temporal de inspección del repo remoto
+check-repo/
+
+# Python / Azure Functions
+__pycache__/
+*.pyc
+.venv/
+venv/
+local.settings.json
+.python_packages/
+
+# Editor
+.vscode/*
+!.vscode/extensions.json
