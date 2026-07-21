@@ -33,15 +33,36 @@ def limpiar_texto_modelo(valor: Optional[str]) -> str:
 
 def parsear_fecha(valor: Union[str, int, float, date, datetime, None]) -> Optional[date]:
     """Replica `parseFecha()` de los Office Scripts: soporta fecha ya parseada,
-    número de serie de Excel, texto DD/MM/YYYY, y valores nulos ("--/--/--")."""
-    if valor is None or valor == "":
+    número de serie de Excel, texto DD/MM/YYYY, y valores nulos ("--/--/--").
+
+    Divergencias deliberadas frente al JS original (ver revisión de calidad de
+    código sobre el commit e64dd43):
+
+    - Fechas de calendario inválidas (p. ej. 31/02/2020): JS `new Date(y, m-1, d)`
+      hace "rollover" silencioso (31/02/2020 -> 02/03/2020). Aquí se prefiere
+      devolver `None`, porque descartar un dato con una fecha mal tecleada es
+      más seguro que reasignarlo silenciosamente a otra fecha real.
+    - Solo 1 de los 5 scripts (`16 m garantía ±30d.osts`) prueba ISO/`Date.parse`
+      ANTES de partir por "/"; los otros 4 (incluido `Fecha24MesesSinVisita(CSV).osts`)
+      parten primero por "/" y solo caen a `new Date(s)` (parser JS laxo) si eso
+      falla. Como 4 de las 5 campañas que usa esta función siguen el patrón
+      mayoritario, se mantiene aquí el orden DD/MM/YYYY-primero como default.
+    """
+    # JS usa `!v`, que trata 0 como "ausente". Un serial de Excel igual a 0
+    # (equivalente a 1899-12-30, el epoch) nunca es una fecha de matriculación
+    # o servicio real, así que se trata como ausente igual que en el original.
+    if valor is None or valor == "" or valor == 0:
         return None
     if isinstance(valor, datetime):
         return valor.date()
     if isinstance(valor, date):
         return valor
     if isinstance(valor, (int, float)):
-        return _EXCEL_EPOCH + timedelta(days=int(valor))
+        # round() en lugar de int(): un serial de Excel puede llegar con
+        # imprecisión de punto flotante (p. ej. 44197.0000001 o 44196.9999999
+        # en vez de 44197 exacto); truncar con int() podría desplazar la
+        # fecha resultante un día en el peor caso.
+        return _EXCEL_EPOCH + timedelta(days=round(valor))
 
     texto = str(valor).strip()
     if not texto or texto == "--/--/--":
@@ -53,9 +74,24 @@ def parsear_fecha(valor: Union[str, int, float, date, datetime, None]) -> Option
             dia, mes, anio = (int(p) for p in partes)
             return date(anio, mes, dia)
         except ValueError:
+            # Cubre tanto partes no numéricas como fechas de calendario
+            # inválidas (ValueError de `date()`, p. ej. 31/02/2020): se
+            # devuelve None en vez de replicar el rollover de JS.
             return None
 
+    # Fallback para textos que no son DD/MM/YYYY. Réplica "best effort" del
+    # parser laxo `new Date(s)` de JS -- no es un match perfecto, pero cubre
+    # los formatos plausibles en esta exportación de Excel usando solo la
+    # librería estándar (sin nuevas dependencias).
     try:
         return datetime.fromisoformat(texto).date()
     except ValueError:
-        return None
+        pass
+
+    for formato in ("%Y-%m-%d", "%d-%m-%Y", "%d.%m.%Y"):
+        try:
+            return datetime.strptime(texto, formato).date()
+        except ValueError:
+            continue
+
+    return None
