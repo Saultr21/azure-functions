@@ -27,9 +27,10 @@ OneDrive/SharePoint → CSV en Base64 devuelto al chat.
 ### Discrepancias encontradas entre el PDF y el código real (`.osts`)
 
 Durante el diseño se localizaron los Office Scripts reales de 3 de las 5 campañas
-(`FiltrarSinVisita3Meses(csv).osts`, `Fecha24MesesSinVisita(CSV).osts`,
-`16 m garantía ±30d.osts`) y se compararon con el PDF y con el Excel maestro real
-(`ExcelFlick.xlsx`, 31.322 filas). Se encontraron diferencias de negocio no triviales:
+(`Flick/office-scripts-actuales/FiltrarSinVisita3Meses(csv).osts`,
+`Fecha24MesesSinVisita(CSV).osts`, `16 m garantía ±30d.osts`) y se compararon con el
+PDF y con el Excel maestro real (`ExcelFlick.xlsx`, 31.322 filas, no versionado por
+confidencialidad — ver `.gitignore`). Se encontraron diferencias de negocio no triviales:
 
 - **Campaña 16M**: el PDF describe el criterio como "Fecha.exp.garantia dentro de
   ±30 días de hoy". El script real filtra por **Fecha.matriculación en una ventana de
@@ -120,11 +121,11 @@ con el resto de funciones del repo.
 
 ### Estructura del código de la Function (orientativa)
 
-Sigue la convención del repo (una carpeta por función en la raíz, junto a
-`ExcelFlick/`, `NormalizarCif/`, etc.):
+Sigue la convención del repo (una carpeta por función), agrupada bajo `Flick/`
+junto con el resto de artefactos de este proyecto (specs, scripts actuales):
 
 ```
-SegmentacionCampanas/
+Flick/SegmentacionCampanas/
   function_app.py       # entry point HTTP trigger (@app.route)
   campaigns.py           # config declarativa de las 5 campañas (Pydantic models)
   filters.py             # filtros globales + motor de aplicación de criterios
