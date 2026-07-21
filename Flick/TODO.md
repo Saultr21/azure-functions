@@ -1,10 +1,28 @@
 # TODO — Flick: Motor de Segmentación con Azure Function
 
 > Last updated: 2026-07-21 (fecha de sesión)
-> Current phase: development (implementación completa, pendiente validación manual y despliegue)
-> Overall progress: 15/15 tasks del plan completadas
+> Current phase: deployment (desplegado en Azure real; pendiente validación manual y conexión con Power Automate)
+> Overall progress: 15/15 tasks del plan completadas + desplegado y probado en Azure real
 
 ## Completed
+
+- [x] `TASK-021` — **Desplegado en Azure real (suscripción CognitiaTech) y probado en producción**
+  - Recursos creados en `flick-segmentacion-rg` (Sweden Central):
+    - Storage Account `stflicksegcampanas` (HTTPS-only, TLS 1.2 mínimo, contenedor
+      privado `csv-campanas` con lifecycle policy de borrado a 7 días)
+    - Function App `func-flick-segmentacion` (Linux, Consumption, Python 3.10,
+      HTTPS-only forzado, Application Insights auto-creado)
+  - Prueba end-to-end real contra `https://func-flick-segmentacion.azurewebsites.net/api/segmentar_campana`
+    con un Excel sintético (sin PII real): 200 OK con CSV correcto (campaña 24M),
+    400 con `campana_requerida`/`campana_desconocida`, 200 con `download_url: null`
+    en 0 resultados (16M) — los 4 casos coinciden exactamente con los tests unitarios.
+  - Blob de prueba borrado tras la validación.
+  - Nota: aparece una función fantasma `SegmentacionCampanasFlick` en el listado
+    (`az functionapp function list`) — es un artefacto del placeholder que Azure
+    crea al aprovisionar Function Apps en Linux Consumption, no corresponde a
+    código real (confirmado: `function_app.py` solo define `segmentar_campana`).
+    Requiere `code` válido para responder (401 sin key) y no tiene ruta real
+    detrás; inofensivo pero cosmético — desaparecerá en un futuro redeploy.
 
 - [x] `TASK-001` a `TASK-014` — Las 15 tasks del plan de implementación
   - Spec: `docs/superpowers/specs/2026-07-21-motor-segmentacion-azure-function-design.md`
@@ -39,14 +57,10 @@
   - Origen: spec §3, plan "fuera de alcance"
   - Prioridad: alta
   - Notas: crear la acción HTTP en el flujo de Power Automate existente,
-    apuntando a la URL de la Function desplegada, con el body binario del Excel
-    y el `code` (function key) como query param.
-
-- [ ] `TASK-017` — Desplegar infraestructura Azure (Function App, Storage Account, Container)
-  - Origen: plan "fuera de alcance"
-  - Prioridad: alta
-  - Notas: incluir la lifecycle policy de Blob Storage (borrado a 7 días) — ver
-    comando de ejemplo en el plan.
+    apuntando a `https://func-flick-segmentacion.azurewebsites.net/api/segmentar_campana?campana=<id>`,
+    con el body binario del Excel (`application/octet-stream`) y el `code`
+    (function key) como query param. Obtener la key con:
+    `az functionapp function keys list --name func-flick-segmentacion --resource-group flick-segmentacion-rg --function-name segmentar_campana --query default -o tsv`
 
 - [ ] `TASK-018` — Refactor: extraer un helper genérico "N meses sin visita"
   - Origen: code review de Task 10
