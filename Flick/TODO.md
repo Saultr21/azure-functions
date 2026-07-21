@@ -10,8 +10,12 @@
   - Recursos creados en `flick-segmentacion-rg` (Sweden Central):
     - Storage Account `stflicksegcampanas` (HTTPS-only, TLS 1.2 mínimo, contenedor
       privado `csv-campanas` con lifecycle policy de borrado a 7 días)
-    - Function App `func-flick-segmentacion` (Linux, Consumption, Python 3.10,
+    - Function App `func-flick-segmentacion` (Linux, Consumption, Python 3.12,
       HTTPS-only forzado, Application Insights auto-creado)
+  - Actualizada de Python 3.10 a 3.12 el mismo día (aviso de EOL de runtime a
+    31/10/2026, quedaban ~3 meses) — redeploy verificado, endpoint sigue
+    funcionando igual tras el cambio. Pendiente de baja prioridad: migrar de
+    Consumo Linux a Flex Consumption (EOL 30/09/2028, sin urgencia).
   - Prueba end-to-end real contra `https://func-flick-segmentacion.azurewebsites.net/api/segmentar_campana`
     con un Excel sintético (sin PII real): 200 OK con CSV correcto (campaña 24M),
     400 con `campana_requerida`/`campana_desconocida`, 200 con `download_url: null`
@@ -61,6 +65,13 @@
     con el body binario del Excel (`application/octet-stream`) y el `code`
     (function key) como query param. Obtener la key con:
     `az functionapp function keys list --name func-flick-segmentacion --resource-group flick-segmentacion-rg --function-name segmentar_campana --query default -o tsv`
+
+- [ ] `TASK-022` — Migrar de Consumo Linux a Flex Consumption
+  - Origen: aviso de Azure Portal (retirada de Consumo Linux, 30/09/2028)
+  - Prioridad: baja
+  - Notas: sin urgencia (quedan más de 2 años). Flex Consumption ofrece
+    arranque en frío más rápido y redes privadas — evaluar cuando el proyecto
+    esté validado y estable en producción.
 
 - [ ] `TASK-018` — Refactor: extraer un helper genérico "N meses sin visita"
   - Origen: code review de Task 10
