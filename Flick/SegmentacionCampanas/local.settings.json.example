@@ -1,0 +1,9 @@
+{
+  "IsEncrypted": false,
+  "Values": {
+    "AzureWebJobsStorage": "UseDevelopmentStorage=true",
+    "FUNCTIONS_WORKER_RUNTIME": "python",
+    "BLOB_CONNECTION_STRING": "<connection-string-del-storage-account>",
+    "BLOB_CONTAINER_NAME": "csv-campanas"
+  }
+}
