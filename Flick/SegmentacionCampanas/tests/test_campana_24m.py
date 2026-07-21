@@ -37,6 +37,34 @@ def test_excluye_codigo_servicio_excluido():
     assert resultado == []
 
 
+def test_codigo_excluido_en_la_visita_mas_reciente_descarta_la_matricula_por_completo():
+    """Regresión del bug de Task: el código excluido se comprueba DESPUÉS del
+    dedup, igual que en Fecha24MesesSinVisita(CSV).osts.
+
+    Escenario: una matrícula con dos visitas, ambas pasado el corte de 24
+    meses. La más reciente (hace 25 meses) tiene un código EXCLUIDO; una
+    anterior (hace 3 años) tiene un código válido. El dedup real (por
+    "última visita", sin mirar el código) elige la visita de hace 25 meses
+    como "la última" -- y esa se descarta por código excluido, dejando la
+    matrícula fuera del resultado POR COMPLETO. La versión con el bug
+    aplicaba el filtro de código excluido ANTES del dedup, por lo que esa
+    visita nunca entraba en el pool de dedup y la visita antigua (con código
+    válido) se colaba como resultado -- justo el comportamiento incorrecto
+    que este test debe impedir.
+    """
+    hace_3_anios = HOY - timedelta(days=3 * 365)
+    hace_25_meses = HOY - timedelta(days=25 * 30)
+
+    registros = [
+        _registro(codigo_servicio="OK1", fecha_servicio=hace_3_anios),
+        _registro(codigo_servicio="YGR", fecha_servicio=hace_25_meses),
+    ]
+
+    resultado = filtrar_24m(registros, hoy=HOY)
+
+    assert resultado == []
+
+
 def test_ordena_por_fecha_de_servicio_ascendente():
     registros = [
         _registro(matricula="AAA", fecha_servicio=HOY - timedelta(days=900)),

@@ -16,7 +16,7 @@ def filtrar_3m(registros: list[RegistroCliente], *, hoy: date) -> list[RegistroC
 
     candidatos = [
         r for r in registros
-        if cumple_filtros_globales(r, aplica_fecha_minima=False, aplica_codigos_excluidos=False)
+        if cumple_filtros_globales(r, aplica_fecha_minima=False)
         and r.fecha_matriculacion is not None
         and r.fecha_servicio is not None
     ]
