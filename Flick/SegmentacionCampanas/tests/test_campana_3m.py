@@ -50,3 +50,30 @@ def test_deduplica_conservando_la_visita_mas_reciente():
     resultado = filtrar_3m(registros, hoy=HOY)
     assert len(resultado) == 1
     assert resultado[0].fecha_servicio == HOY - timedelta(days=200)
+
+
+def test_cutoff_estilo_js_en_frontera_de_fin_de_mes():
+    # hoy=31/05/2026: febrero de 2026 tiene 28 días, así que el cutoff
+    # correcto (estilo JS Date.setMonth, con overflow) es 03/03/2026, NO el
+    # 28/02/2026 que produciría dateutil.relativedelta (clamp). Este test
+    # fija ese comportamiento exacto de frontera para evitar una regresión
+    # al bug original.
+    hoy_frontera = date(2026, 5, 31)
+    fecha_matriculacion_antigua = date(2020, 1, 1)
+
+    registros = [
+        _registro(
+            fecha_matriculacion=fecha_matriculacion_antigua,
+            fecha_servicio=date(2026, 3, 3),  # exactamente en el cutoff -> incluido
+        ),
+        _registro(
+            matricula="9999XYZ",
+            fecha_matriculacion=fecha_matriculacion_antigua,
+            fecha_servicio=date(2026, 3, 4),  # un día después del cutoff -> excluido
+        ),
+    ]
+
+    resultado = filtrar_3m(registros, hoy=hoy_frontera)
+
+    matriculas_incluidas = {r.matricula for r in resultado}
+    assert matriculas_incluidas == {"1234ABC"}

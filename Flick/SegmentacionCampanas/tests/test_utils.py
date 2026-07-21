@@ -1,6 +1,11 @@
 from datetime import date
 
-from utils import normalizar_texto, limpiar_texto_modelo, parsear_fecha
+from utils import (
+    normalizar_texto,
+    limpiar_texto_modelo,
+    parsear_fecha,
+    restar_meses_estilo_js,
+)
 
 
 def test_normalizar_texto_quita_acentos_y_minusculas():
@@ -57,3 +62,26 @@ def test_parsear_fecha_fallback_iso_y_formatos_comunes():
     assert parsear_fecha("2021-06-15") == date(2021, 6, 15)
     assert parsear_fecha("15-06-2021") == date(2021, 6, 15)
     assert parsear_fecha("15.06.2021") == date(2021, 6, 15)
+
+
+def test_restar_meses_estilo_js_desborda_a_marzo_por_febrero_corto():
+    # 31/05/2026 - 3 meses: febrero de 2026 solo tiene 28 días, por lo que
+    # JS desborda al 03/03/2026 en vez de recortar a 28/02 (bug de
+    # dateutil.relativedelta que este helper corrige).
+    assert restar_meses_estilo_js(date(2026, 5, 31), 3) == date(2026, 3, 3)
+
+
+def test_restar_meses_estilo_js_desborda_a_mayo_por_abril_corto():
+    # 31/07/2026 - 3 meses: abril tiene 30 días, desborda a 01/05/2026.
+    assert restar_meses_estilo_js(date(2026, 7, 31), 3) == date(2026, 5, 1)
+
+
+def test_restar_meses_estilo_js_desborda_a_octubre_por_septiembre_corto():
+    # 31/12/2026 - 3 meses: septiembre tiene 30 días, desborda a 01/10/2026.
+    assert restar_meses_estilo_js(date(2026, 12, 31), 3) == date(2026, 10, 1)
+
+
+def test_restar_meses_estilo_js_sin_desborde_retrocede_anio():
+    # 15/01/2026 - 3 meses: caso simple sin desborde, además verifica que
+    # el retroceso de año (a 2025) funciona correctamente.
+    assert restar_meses_estilo_js(date(2026, 1, 15), 3) == date(2025, 10, 15)

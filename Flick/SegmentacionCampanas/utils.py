@@ -95,3 +95,30 @@ def parsear_fecha(valor: Union[str, int, float, date, datetime, None]) -> Option
             continue
 
     return None
+
+
+def restar_meses_estilo_js(fecha: date, meses: int) -> date:
+    """Replica `d.setMonth(d.getMonth() - meses)` de JavaScript, incluido su
+    comportamiento de "overflow" cuando el día del mes original no existe en
+    el mes de destino.
+
+    A diferencia de `dateutil.relativedelta(months=N)`, que RECORTA
+    (clamps) al último día válido del mes de destino (p. ej. 31/05 - 3
+    meses -> 28/02), JS normaliza el objeto `Date` desbordando hacia el mes
+    siguiente (31/05 - 3 meses -> 03/03), porque `Date.setMonth` fija
+    únicamente el campo de mes y deja que el motor de JS renormalice el día
+    si se sale de rango. Ver `FiltrarSinVisita3Meses(csv).osts` y
+    `Fecha24MesesSinVisita(CSV).osts`, que usan exactamente este patrón.
+
+    Se implementa construyendo el día 1 del mes de destino (ya normalizado
+    en año y mes 0-based) y sumando `timedelta(days=dia - 1)`, que
+    reproduce el mismo overflow que JS: "día N de un mes que puede no tener
+    N días" avanza rodando hacia el mes siguiente.
+    """
+    dia, mes, anio = fecha.day, fecha.month, fecha.year
+
+    mes_raw = (mes - 1) - meses
+    anio_ajustado = anio + mes_raw // 12
+    mes_0based = mes_raw % 12
+
+    return date(anio_ajustado, mes_0based + 1, 1) + timedelta(days=dia - 1)

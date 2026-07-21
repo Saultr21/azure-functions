@@ -1,11 +1,10 @@
 # Flick/SegmentacionCampanas/campanas/campana_3m.py
 from datetime import date
 
-from dateutil.relativedelta import relativedelta
-
 from models import RegistroCliente
 from filtros_globales import cumple_filtros_globales
 from dedup import deduplicar_por_matricula_ultima_visita
+from utils import restar_meses_estilo_js
 
 KM_MAXIMO_ULTIMO_SERVICIO = 200
 
@@ -13,7 +12,7 @@ KM_MAXIMO_ULTIMO_SERVICIO = 200
 def filtrar_3m(registros: list[RegistroCliente], *, hoy: date) -> list[RegistroCliente]:
     """Réplica exacta de FiltrarSinVisita3Meses(csv).osts: NO aplica fecha
     mínima 2019 ni códigos excluidos (ver tabla de criterios en el plan)."""
-    corte = hoy - relativedelta(months=3)
+    corte = restar_meses_estilo_js(hoy, 3)
 
     candidatos = [
         r for r in registros
