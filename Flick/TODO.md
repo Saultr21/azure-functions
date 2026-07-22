@@ -1,8 +1,8 @@
 # TODO — Flick: Motor de Segmentación con Azure Function
 
 > Last updated: 2026-07-22
-> Current phase: deployment (agente de Copilot Studio conectado, probado end-to-end con datos reales, y mostrando resultados en el chat; pendiente validación manual de negocio y rotar la function key expuesta)
-> Overall progress: 15/15 tasks del plan + desplegado en Azure + agente de Copilot Studio conectado y probado end-to-end con resultados visibles en chat
+> Current phase: deployment (agente de Copilot Studio conectado, probado end-to-end con datos reales, mostrando resultados y avisos de municipios no reconocidos en el chat; pendiente validación manual de negocio, confirmar zona de servicio real y rotar la function key expuesta)
+> Overall progress: 15/15 tasks del plan + desplegado en Azure + agente de Copilot Studio conectado y probado end-to-end con resultados y avisos visibles en chat
 
 ## Completed
 
@@ -32,6 +32,15 @@
   - El JSON de respuesta de la Function no cambió de forma (mismos campos: `total_clientes`, `download_url`, `nombre_archivo`, `csv_contenido`) — **no hizo falta tocar el flujo de Copilot Studio**, solo redesplegar la Function App.
   - 65 tests en verde (2 nuevos en `test_excel_writer.py`) antes del redespliegue a Azure.
   - **Nota (falso positivo investigado)**: tras el despliegue, un usuario reportó que el enlace "descargaba algo raro, no un Excel". Verificado con `curl` contra la URL SAS exacta del chat: headers (`Content-Type`, `Content-Disposition`) y contenido correctos, `file` confirma "Microsoft Excel 2007+" válido. El problema era que Chrome guardaba la descarga con un nombre GUID en vez del nombre real del archivo (sin extensión visible) — comportamiento del navegador, no un bug de la Function/Blob Storage. Si se repite con otro usuario, comprobar primero si el navegador está renombrando la descarga antes de sospechar del backend.
+
+- [x] `TASK-026` — **Visibilidad de municipios no reconocidos**
+  - Origen: el usuario cuestionó (con razón) que `MUNICIPIOS_VALIDOS` sea una lista cerrada en código — si viene un cliente de un municipio nuevo/no listado, se descarta silenciosamente de las 5 campañas sin ningún aviso.
+  - Decisión del usuario: mantener la lista en código (no moverla a config externa — cambia poquísimo, y así queda protegida por tests), pero **sí** añadir visibilidad de cuántos registros se pierden por esto.
+  - Nueva `municipios_no_reconocidos()` en `filtros_globales.py`: cuenta, solo entre registros con un **modelo Yamaha válido** (para no contar ruido de gente que ya se descartaría por modelo), cuántos tienen un municipio fuera de `MUNICIPIOS_VALIDOS`, agrupado por el texto tal cual aparece en el Excel.
+  - `ResultadoCampana` añade el campo `municipios_no_reconocidos: dict[str, int]`; `function_app.py` lo incluye en la respuesta JSON (éxito y 0 resultados) y lo loguea como warning en Application Insights cuando no está vacío.
+  - No cambia qué se filtra — es puramente informativo. 69 tests en verde, redesplegado en Azure.
+  - **Extensión (mismo día): surfacing en el chat del agente.** Añadida una nueva salida `municipios_no_reconocidos` (Text) en el nodo "Respond to the agent" del workflow `generar_lista_campana`, con la expresión `@{string(body('HTTP')?['municipios_no_reconocidos'])}` (se serializa a JSON string porque Copilot Studio no tiene tipo de salida Object). Instrucciones del agente actualizadas para mostrar, tras el enlace de descarga, un aviso `⚠️ Nota: se han excluido N clientes...` cuando el diccionario no está vacío. Verificado end-to-end en el chat de vista previa.
+  - **Hallazgo relevante encontrado durante la prueba end-to-end (campaña 3M, 2026-07-22): 4.029 clientes excluidos por municipio no reconocido, frente a solo 224 candidatos válidos.** Los municipios no reconocidos más frecuentes incluyen **San Bartolomé de Tirajana** y **Santa Lucía de Tirajana** — municipios grandes y conocidos de Gran Canaria, no errores tipográficos ni casos raros. Esto sugiere que `MUNICIPIOS_VALIDOS` (13 municipios, todos del norte/centro de la isla) podría estar excluyendo por diseño zonas de servicio completas del sur (posiblemente cubiertas por otro concesionario/zona), o podría ser una laguna real de la lista heredada de los Office Scripts. Requiere confirmación de negocio — ver `TASK-027`.
 
 - [x] `TASK-021` — **Desplegado en Azure real (suscripción CognitiaTech) y probado en producción**
   - Recursos creados en `flick-segmentacion-rg` (Sweden Central):
@@ -83,6 +92,11 @@
     16M (el PDF describía mal el criterio real) podría repetirse aquí.
   - Esto requiere acceso al entorno de Power Automate/Copilot Studio de Flick,
     que un agente no puede ejecutar de forma autónoma.
+
+- [ ] `TASK-027` — **Confirmar con Flick si excluir San Bartolomé/Santa Lucía de Tirajana (zona sur) es intencional**
+  - Origen: hallazgo durante la prueba end-to-end de TASK-026 (ver arriba) — 4.029 registros excluidos de la campaña 3M solo en la ejecución de prueba, muchos de municipios grandes del sur de Gran Canaria que no están en `MUNICIPIOS_VALIDOS`.
+  - Prioridad: alta — podría significar que Flick está perdiendo un volumen grande de candidatos legítimos en las 5 campañas, o podría ser una exclusión de zona deliberada (p. ej. esos municipios los atiende otro concesionario Yamaha). Relacionado con `TASK-015` (validación manual de negocio).
+  - Qué falta: preguntar a alguien de Flick que conozca el negocio si la lista de 13 municipios (`arucas, firgas, galdar, ingenio, moya, las palmas, santa brigida, guia, telde, teror, valleseco, valsequillo, vega de san mateo`) es la zona de servicio completa o si faltan municipios por añadir a `MUNICIPIOS_VALIDOS` en `filtros_globales.py`.
 
 - [ ] `TASK-023` — Rotar la function key expuesta durante TASK-016
   - Origen: incidente de seguridad durante la sesión de integración con Copilot Studio (ver TASK-016 completada)
@@ -142,6 +156,10 @@
   herramientas de este tipo se ejecutan directamente desde el agente sin pasar
   por Power Automate como capa intermedia. DEC-001/002/003 siguen aplicando
   igual (function key simple, CSV vía link de Blob Storage). (2026-07-22)
+
+- [x] `TASK-028` — **Documento de arquitectura y replicación (`SegmentacionCampanas/ARQUITECTURA.md`)**
+  - Origen: petición explícita del usuario para poder mantener y replicar el sistema completo (Function + workflow + agente) en otro cliente en el futuro.
+  - Cubre: diagrama de extremo a extremo, lógica de negocio de las 5 campañas y sus filtros/dedup, infraestructura Azure, configuración exacta del workflow y del agente en Copilot Studio (con las trampas encontradas: pérdida de cambios no guardados, `fill()` de Playwright reemplazando el editor rich-text en vez de insertar), el hallazgo de `TASK-027`, y un checklist paso a paso para replicar el patrón con otro cliente.
 
 ## Notes
 

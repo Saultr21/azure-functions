@@ -29,9 +29,21 @@ def segmentar_campana(req: func.HttpRequest) -> func.HttpResponse:
         logging.exception("segmentar_campana: error procesando el Excel (campaña=%s)", campana_id)
         return _error(500, "error_procesamiento", "No se pudo procesar el Excel maestro.")
 
+    if resultado.municipios_no_reconocidos:
+        logging.warning(
+            "segmentar_campana: campaña=%s municipios_no_reconocidos=%s",
+            campana_id, resultado.municipios_no_reconocidos,
+        )
+
     if resultado.total_clientes == 0:
         return func.HttpResponse(
-            json.dumps({"total_clientes": 0, "download_url": None, "nombre_archivo": None, "csv_contenido": ""}),
+            json.dumps({
+                "total_clientes": 0,
+                "download_url": None,
+                "nombre_archivo": None,
+                "csv_contenido": "",
+                "municipios_no_reconocidos": resultado.municipios_no_reconocidos,
+            }),
             status_code=200,
             mimetype="application/json",
         )
@@ -56,6 +68,7 @@ def segmentar_campana(req: func.HttpRequest) -> func.HttpResponse:
             "download_url": download_url,
             "nombre_archivo": resultado.nombre_archivo,
             "csv_contenido": resultado.csv_contenido,
+            "municipios_no_reconocidos": resultado.municipios_no_reconocidos,
         }),
         status_code=200,
         mimetype="application/json",

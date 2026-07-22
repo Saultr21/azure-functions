@@ -44,6 +44,31 @@ def test_ejecutar_campana_3m_devuelve_registros_csv_y_excel():
     valores_fila = [celda.value for celda in libro.active[2]]
     assert "1234ABC" in valores_fila
 
+    # Ningún municipio no reconocido en este Excel de prueba (Telde es válido).
+    assert resultado.municipios_no_reconocidos == {}
+
+
+def test_ejecutar_campana_reporta_municipios_no_reconocidos():
+    wb = openpyxl.Workbook()
+    ws = wb.active
+    ws.title = "Hoja1"
+    ws.append(COLUMNAS)
+    # Modelo Yamaha válido pero municipio fuera de la lista -- se descarta
+    # del resultado, pero debe contarse como municipio no reconocido.
+    ws.append([
+        "9999XYZ", "Yamaha NMAX 125", "Agaete", date(2023, 1, 1),
+        date(2020, 1, 1), 50, 10000, "OK1", "--/--/--", "--/--/--",
+        "--/--/--", "Sr.", "600999999", "otro@example.com",
+    ])
+    buffer = io.BytesIO()
+    wb.save(buffer)
+    excel_bytes = buffer.getvalue()
+
+    resultado = ejecutar_campana(CampanaId.TRES_MESES, excel_bytes, hoy=date(2026, 7, 21))
+
+    assert resultado.total_clientes == 0
+    assert resultado.municipios_no_reconocidos == {"Agaete": 1}
+
 
 def test_campana_no_soportada_lanza_error():
     with pytest.raises(CampanaNoSoportadaError):

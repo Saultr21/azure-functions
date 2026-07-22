@@ -70,3 +70,28 @@ def tiene_codigo_excluido(registro: RegistroCliente) -> bool:
     módulo) -- no dentro de `cumple_filtros_globales`.
     """
     return registro.codigo_servicio.strip().upper() in CODIGOS_SERVICIO_EXCLUIDOS
+
+
+def municipios_no_reconocidos(registros: list[RegistroCliente]) -> dict[str, int]:
+    """Cuenta, entre los registros con un modelo Yamaha válido, cuántos tienen
+    un municipio que no está en `MUNICIPIOS_VALIDOS`.
+
+    No cambia el filtrado (esos registros se siguen descartando igual que
+    siempre) -- solo hace visible cuántos clientes potenciales se están
+    perdiendo por un municipio no reconocido (mudanza, error de escritura en
+    el Excel, zona de servicio nueva, etc.), para que Flick pueda detectarlo
+    sin tener que revisar el Excel a mano."""
+    conteo: dict[str, int] = {}
+    for registro in registros:
+        modelo_limpio = limpiar_texto_modelo(registro.descripcion)
+        if not any(m in modelo_limpio for m in MODELOS_VALIDOS):
+            continue
+
+        municipio_norm = normalizar_texto(registro.municipio)
+        if any(m in municipio_norm for m in MUNICIPIOS_VALIDOS):
+            continue
+
+        clave = registro.municipio.strip() if registro.municipio and registro.municipio.strip() else "(vacío)"
+        conteo[clave] = conteo.get(clave, 0) + 1
+
+    return dict(sorted(conteo.items(), key=lambda item: (-item[1], item[0])))
