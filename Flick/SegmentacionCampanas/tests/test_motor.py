@@ -31,14 +31,18 @@ def _excel_con_una_fila_valida_3m() -> bytes:
     return buffer.getvalue()
 
 
-def test_ejecutar_campana_3m_devuelve_registros_y_csv():
+def test_ejecutar_campana_3m_devuelve_registros_csv_y_excel():
     excel_bytes = _excel_con_una_fila_valida_3m()
 
     resultado = ejecutar_campana(CampanaId.TRES_MESES, excel_bytes, hoy=date(2026, 7, 21))
 
     assert resultado.total_clientes == 1
     assert "1234ABC" in resultado.csv_contenido
-    assert resultado.nombre_archivo == "FiltradoCampana3M_2026-07-21.csv"
+    assert resultado.nombre_archivo == "FiltradoCampana3M_2026-07-21.xlsx"
+
+    libro = openpyxl.load_workbook(io.BytesIO(resultado.excel_contenido))
+    valores_fila = [celda.value for celda in libro.active[2]]
+    assert "1234ABC" in valores_fila
 
 
 def test_campana_no_soportada_lanza_error():

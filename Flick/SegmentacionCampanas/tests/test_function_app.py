@@ -28,13 +28,14 @@ def test_campana_desconocida_devuelve_400():
     assert respuesta.status_code == 400
 
 
-@patch("function_app.subir_csv_y_generar_link", return_value="https://fake/url?sas=1")
+@patch("function_app.subir_excel_y_generar_link", return_value="https://fake/url?sas=1")
 @patch("function_app.ejecutar_campana")
 def test_ejecucion_correcta_devuelve_200_con_link(mock_ejecutar, mock_subir):
     from campanas.motor import ResultadoCampana
 
     mock_ejecutar.return_value = ResultadoCampana(
-        total_clientes=3, csv_contenido="a;b\n1;2", nombre_archivo="Filtrado.csv"
+        total_clientes=3, csv_contenido="a;b\n1;2", excel_contenido=b"excel-fake",
+        nombre_archivo="Filtrado.xlsx",
     )
 
     respuesta = segmentar_campana(_request(campana="3M", body=b"excel-binario"))
@@ -43,6 +44,11 @@ def test_ejecucion_correcta_devuelve_200_con_link(mock_ejecutar, mock_subir):
     cuerpo = json.loads(respuesta.get_body())
     assert cuerpo["total_clientes"] == 3
     assert cuerpo["download_url"] == "https://fake/url?sas=1"
+    assert cuerpo["nombre_archivo"] == "Filtrado.xlsx"
+    assert cuerpo["csv_contenido"] == "a;b\n1;2"
+    # El Excel (no el CSV) es lo que se sube a Blob Storage para la descarga.
+    assert mock_subir.call_args.kwargs["excel_contenido"] == b"excel-fake"
+    assert mock_subir.call_args.kwargs["nombre_archivo"] == "Filtrado.xlsx"
 
 
 @patch("function_app.ejecutar_campana")
@@ -58,13 +64,13 @@ def test_error_generico_al_ejecutar_campana_devuelve_500(mock_ejecutar):
     assert "boom" not in cuerpo["mensaje"]
 
 
-@patch("function_app.subir_csv_y_generar_link")
+@patch("function_app.subir_excel_y_generar_link")
 @patch("function_app.ejecutar_campana")
 def test_cero_resultados_no_sube_a_blob_y_devuelve_download_url_null(mock_ejecutar, mock_subir):
     from campanas.motor import ResultadoCampana
 
     mock_ejecutar.return_value = ResultadoCampana(
-        total_clientes=0, csv_contenido="", nombre_archivo="x.csv"
+        total_clientes=0, csv_contenido="", excel_contenido=b"", nombre_archivo="x.xlsx"
     )
 
     respuesta = segmentar_campana(_request(campana="3M", body=b"excel-binario"))
@@ -73,16 +79,18 @@ def test_cero_resultados_no_sube_a_blob_y_devuelve_download_url_null(mock_ejecut
     cuerpo = json.loads(respuesta.get_body())
     assert cuerpo["total_clientes"] == 0
     assert cuerpo["download_url"] is None
+    assert cuerpo["csv_contenido"] == ""
     mock_subir.assert_not_called()
 
 
-@patch("function_app.subir_csv_y_generar_link")
+@patch("function_app.subir_excel_y_generar_link")
 @patch("function_app.ejecutar_campana")
 def test_error_al_subir_a_blob_devuelve_500(mock_ejecutar, mock_subir):
     from campanas.motor import ResultadoCampana
 
     mock_ejecutar.return_value = ResultadoCampana(
-        total_clientes=3, csv_contenido="a;b\n1;2", nombre_archivo="Filtrado.csv"
+        total_clientes=3, csv_contenido="a;b\n1;2", excel_contenido=b"excel-fake",
+        nombre_archivo="Filtrado.xlsx",
     )
     mock_subir.side_effect = Exception("blob-boom")
 

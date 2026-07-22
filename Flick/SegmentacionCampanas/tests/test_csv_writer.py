@@ -1,7 +1,7 @@
 from datetime import date
 
 from models import CampanaId, RegistroCliente
-from csv_writer import generar_csv, nombre_archivo_csv
+from csv_writer import generar_csv
 
 
 def test_genera_csv_con_separador_punto_y_coma_y_cabeceras_base():
@@ -54,8 +54,3 @@ def test_campana_16m_incluye_columnas_de_garantia():
 
     assert "FECHA EXP GARANTIA" in csv_texto.split("\n")[0]
     assert "INICIO GARANT EXTEND" in csv_texto.split("\n")[0]
-
-
-def test_nombre_archivo_incluye_campana_y_fecha():
-    nombre = nombre_archivo_csv(CampanaId.VEINTICUATRO_MESES, hoy=date(2026, 7, 21))
-    assert nombre == "FiltradoCampana24M_2026-07-21.csv"

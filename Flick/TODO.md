@@ -1,10 +1,37 @@
 # TODO — Flick: Motor de Segmentación con Azure Function
 
-> Last updated: 2026-07-21 (fecha de sesión)
-> Current phase: deployment (desplegado en Azure real; pendiente validación manual y conexión con Power Automate)
-> Overall progress: 15/15 tasks del plan completadas + desplegado y probado en Azure real
+> Last updated: 2026-07-22
+> Current phase: deployment (agente de Copilot Studio conectado, probado end-to-end con datos reales, y mostrando resultados en el chat; pendiente validación manual de negocio y rotar la function key expuesta)
+> Overall progress: 15/15 tasks del plan + desplegado en Azure + agente de Copilot Studio conectado y probado end-to-end con resultados visibles en chat
 
 ## Completed
+
+- [x] `TASK-016` — **Conectar Power Automate → Azure Function (hecho vía Copilot Studio, no Power Automate clásico)**
+  - Entorno real de Flick: Copilot Studio "AgenteFlick" (tenant `grupoflick.onmicrosoft.com`), agente **"Agente Campañas"**, workflow tool **`generar_lista_campana`** (nueva experiencia de Copilot Studio, no Power Automate clásico — el agente ya existía construido así).
+  - Flujo: `When an agent calls the flow` (input `campana`, texto) → **OneDrive "Obtener contenido de archivo"** (conexión `sistemas3@grupoflick.onmicrosoft.com`, archivo `/ExcelFlick/ExcelFlick.xlsx`) → **HTTP POST** a `https://func-flick-segmentacion.azurewebsites.net/api/segmentar_campana` (header `Content-Type: application/octet-stream`, query `campana` + `code`=function key, body=contenido del archivo) → **Respond to the agent** (`total_clientes`, `download_url`).
+  - Probado end-to-end en el chat de vista previa: petición "16 meses de garantía" → 14 candidatos, CSV `FiltradoCampana16M_2026-07-22.csv`, enlace SAS de descarga — **coincide exactamente** con el sanity check original de TASK-001..014 (16M=14 candidatos).
+  - Bugs encontrados y corregidos durante la integración:
+    - La descripción del input `campana` decía usar códigos `46M_PREITV`/`16M_GARANTIA` (invención mía, sin verificar el código) — los códigos reales en `models.py` son `3M/24M/36M/46M/16M`. Corregido en la descripción del input y reforzado con mapeo explícito en las Instrucciones del agente (el modelo no seguía fielmente solo la descripción del parámetro).
+    - El nodo "Respond to the agent" se quedó sin las salidas (`total_clientes`/`download_url`) configuradas al menos dos veces durante la sesión — el editor de Copilot Studio parece perder cambios no confirmados si se navega fuera del panel antes de que el autoguardado confirme. Mitigación: tras configurar salidas, verificar con recarga de página que persisten antes de seguir.
+  - Añadido también (fuera del alcance original de TASK-016, a petición del usuario): mensaje de saludo personalizado y 5 "indicaciones sugeridas" (una por campaña) en Configuración del agente → Saludos e indicaciones, ya que la nueva experiencia de Copilot Studio no soporta Adaptive Cards/botones (eso es exclusivo de la experiencia clásica con Topics, según [Classic vs. new agent experience](https://learn.microsoft.com/en-us/microsoft-copilot-studio/agents-experience/classic-vs-new)).
+  - **Incidente de seguridad menor**: la function key quedó expuesta en texto plano en mi contexto una vez, al inspeccionar el detalle de una ejecución fallida del flujo (el panel "Detalles de la ejecución" no enmascara valores de query params). Usuario decidió no rotarla de inmediato (entorno de pruebas). Pendiente rotarla antes de pasar a producción real (ver TASK-023).
+
+- [x] `TASK-024` — **Mostrar resultados en el chat + enlace de descarga que abre en vez de forzar descarga**
+  - `blob_storage.py`: el blob se sube ahora con `ContentSettings(content_type="text/plain; charset=utf-8", content_disposition='inline; filename="..."')` en vez de `content_settings=None` — antes el enlace SAS forzaba una descarga "rara" (sin tipo definido); ahora abre el CSV como texto plano en una pestaña del navegador.
+  - `function_app.py`: la respuesta 200 ahora incluye también `csv_contenido` (el CSV completo) y `nombre_archivo`, además de `total_clientes`/`download_url`. Antes solo devolvía conteo y link.
+  - Redesplegado en Azure (`func azure functionapp publish func-flick-segmentacion`) — 63 tests en verde antes del despliegue.
+  - Workflow `generar_lista_campana` en Copilot Studio: añadidas las salidas `csv_contenido` y `nombre_archivo` en "Respond to the agent" (antes solo `total_clientes`/`download_url`).
+  - Instrucciones del agente actualizadas: ahora parsea `csv_contenido` y lo muestra como tabla Markdown en el chat (todas las filas si son pocas, primeras 20 + nota si son muchas), seguido siempre de total/nombre de archivo/enlace.
+  - **Decisión de negocio del usuario**: el CSV contiene PII (teléfono, email, dirección) y antes se evitaba deliberadamente su log (ver docstring de `blob_storage.py`); el usuario decidió explícitamente que mostrar el contenido completo en el chat es aceptable porque el equipo que usa el chat ya tiene acceso al Excel/CSV original. Verificado end-to-end con datos reales (campaña 16M, 1 candidato en Moya) — la tabla se renderiza correctamente y el agente puede incluso responder preguntas de seguimiento filtrando sobre los datos ya mostrados.
+
+- [x] `TASK-025` — **Archivo descargable en Excel (.xlsx) en vez de CSV**
+  - Nuevo `excel_writer.py` (`generar_excel`, `nombre_archivo_excel`) — reutiliza `cabeceras_para`/`valor_campo` de `csv_writer.py` (antes privados `_cabeceras_para`/`_valor_campo`, ahora públicos y compartidos entre ambos writers). A diferencia del CSV, los números se guardan como celdas numéricas reales (no texto), y no hace falta escapar `;`.
+  - `ResultadoCampana` (motor.py) ahora tiene tanto `csv_contenido` (texto, solo para la tabla del chat) como `excel_contenido` (bytes, para el archivo descargable) y `nombre_archivo` termina en `.xlsx`.
+  - `blob_storage.py`: `subir_csv_y_generar_link` → renombrada a `subir_excel_y_generar_link`, recibe bytes en vez de texto, sube con `content_type=application/vnd.openxmlformats-officedocument.spreadsheetml.sheet` y `content_disposition=attachment` (a diferencia del texto plano anterior, un .xlsx no se puede previsualizar en el navegador, así que se ofrece como descarga directa con el nombre correcto).
+  - `csv_writer.py`: eliminada `nombre_archivo_csv` (quedó sin uso al pasar la descarga a Excel).
+  - El JSON de respuesta de la Function no cambió de forma (mismos campos: `total_clientes`, `download_url`, `nombre_archivo`, `csv_contenido`) — **no hizo falta tocar el flujo de Copilot Studio**, solo redesplegar la Function App.
+  - 65 tests en verde (2 nuevos en `test_excel_writer.py`) antes del redespliegue a Azure.
+  - **Nota (falso positivo investigado)**: tras el despliegue, un usuario reportó que el enlace "descargaba algo raro, no un Excel". Verificado con `curl` contra la URL SAS exacta del chat: headers (`Content-Type`, `Content-Disposition`) y contenido correctos, `file` confirma "Microsoft Excel 2007+" válido. El problema era que Chrome guardaba la descarga con un nombre GUID en vez del nombre real del archivo (sin extensión visible) — comportamiento del navegador, no un bug de la Function/Blob Storage. Si se repite con otro usuario, comprobar primero si el navegador está renombrando la descarga antes de sospechar del backend.
 
 - [x] `TASK-021` — **Desplegado en Azure real (suscripción CognitiaTech) y probado en producción**
   - Recursos creados en `flick-segmentacion-rg` (Sweden Central):
@@ -57,14 +84,11 @@
   - Esto requiere acceso al entorno de Power Automate/Copilot Studio de Flick,
     que un agente no puede ejecutar de forma autónoma.
 
-- [ ] `TASK-016` — Conectar Power Automate → Azure Function
-  - Origen: spec §3, plan "fuera de alcance"
-  - Prioridad: alta
-  - Notas: crear la acción HTTP en el flujo de Power Automate existente,
-    apuntando a `https://func-flick-segmentacion.azurewebsites.net/api/segmentar_campana?campana=<id>`,
-    con el body binario del Excel (`application/octet-stream`) y el `code`
-    (function key) como query param. Obtener la key con:
-    `az functionapp function keys list --name func-flick-segmentacion --resource-group flick-segmentacion-rg --function-name segmentar_campana --query default -o tsv`
+- [ ] `TASK-023` — Rotar la function key expuesta durante TASK-016
+  - Origen: incidente de seguridad durante la sesión de integración con Copilot Studio (ver TASK-016 completada)
+  - Prioridad: media (antes de producción real con datos reales de Flick)
+  - Notas: `az functionapp function keys renew --name func-flick-segmentacion --resource-group flick-segmentacion-rg --function-name segmentar_campana --key-name default`,
+    luego actualizar el query param `code` en la acción HTTP del workflow `generar_lista_campana` en Copilot Studio (Configurar → Parámetros avanzados → Queries).
 
 - [ ] `TASK-022` — Migrar de Consumo Linux a Flex Consumption
   - Origen: aviso de Azure Portal (retirada de Consumo Linux, 30/09/2028)
@@ -111,6 +135,13 @@
   `Fecha.exp.garantia` = `Fecha.matriculación` + 24 meses, confirmando que el
   script real es una campaña de venta proactiva de garantía extendida, no un
   aviso de vencimiento. (2026-07-21)
+- `DEC-005`: El puente hacia la Function no se implementó como flujo de Power
+  Automate clásico sino como **workflow tool nativo de Copilot Studio** (nueva
+  experiencia, `When an agent calls the flow` + `Respond to the agent`) — el
+  agente "Agente Campañas" ya existía construido en esa experiencia, y las
+  herramientas de este tipo se ejecutan directamente desde el agente sin pasar
+  por Power Automate como capa intermedia. DEC-001/002/003 siguen aplicando
+  igual (function key simple, CSV vía link de Blob Storage). (2026-07-22)
 
 ## Notes
 

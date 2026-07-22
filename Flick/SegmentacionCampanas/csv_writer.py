@@ -1,8 +1,8 @@
 """Generación del CSV de salida con el mismo formato que producen hoy los
 Office Scripts: separador punto y coma, cabeceras en español, fechas ISO.
-La campaña 16M añade dos columnas de garantía en una posición fija."""
-
-from datetime import date
+La campaña 16M añade dos columnas de garantía en una posición fija.
+Este CSV solo se usa para la vista previa en el chat del agente; el fichero
+descargable es el Excel generado por excel_writer.py."""
 
 from models import CampanaId, RegistroCliente
 
@@ -14,7 +14,7 @@ CABECERAS_BASE = [
 
 CABECERAS_GARANTIA_EXTRA = ["FECHA EXP GARANTIA", "INICIO GARANT EXTEND"]
 
-_MAPA_CAMPOS = {
+MAPA_CAMPOS = {
     "FECHA MATRICULACION": "fecha_matriculacion",
     "N MATRICULA": "matricula",
     "DESCRIPCION": "descripcion",
@@ -32,7 +32,7 @@ _MAPA_CAMPOS = {
 }
 
 
-def _cabeceras_para(campana: CampanaId) -> list[str]:
+def cabeceras_para(campana: CampanaId) -> list[str]:
     """Las cabeceras base valen para las 5 campañas; la 16M inserta las dos
     columnas de garantía justo después de FIN MANTENIMIENTO, igual que el
     Office Script equivalente."""
@@ -46,34 +46,33 @@ def _cabeceras_para(campana: CampanaId) -> list[str]:
     return CABECERAS_BASE
 
 
-def _valor_campo(registro: RegistroCliente, cabecera: str) -> str:
-    """Lee el campo del registro correspondiente a la cabecera y lo deja listo
-    para el CSV: vacío si es None, y sin punto y coma (que rompería el
-    separador) si es texto libre."""
-    nombre_campo = _MAPA_CAMPOS[cabecera]
+def valor_campo(registro: RegistroCliente, cabecera: str):
+    """Lee el campo del registro correspondiente a la cabecera: None si no
+    tiene valor, int si es un float entero (Pydantic coerce enteros a float,
+    p. ej. 5000 -> 5000.0, y los Office Scripts originales manejan números JS
+    puros sin ".0"), o el valor tal cual en el resto de casos."""
+    nombre_campo = MAPA_CAMPOS[cabecera]
     valor = getattr(registro, nombre_campo)
     if valor is None:
-        texto = ""
-    elif isinstance(valor, float) and valor.is_integer():
-        # Pydantic coerce enteros a float (p. ej. 5000 -> 5000.0); los Office
-        # Scripts originales manejan números JS puros y nunca añaden ".0",
-        # así que reproducimos ese formato para no romper el CSV histórico.
-        texto = str(int(valor))
-    else:
-        texto = str(valor)
+        return None
+    if isinstance(valor, float) and valor.is_integer():
+        return int(valor)
+    return valor
+
+
+def _valor_campo_csv(registro: RegistroCliente, cabecera: str) -> str:
+    """Versión en texto de valor_campo para el CSV: vacío si es None, y sin
+    punto y coma (que rompería el separador) si es texto libre."""
+    valor = valor_campo(registro, cabecera)
+    texto = "" if valor is None else str(valor)
     return texto.replace(";", ",")
 
 
 def generar_csv(registros: list[RegistroCliente], *, campana: CampanaId) -> str:
     """Construye el CSV completo (cabecera + filas) en el formato exacto que
     ya usan los Office Scripts, para no romper el flujo de trabajo actual."""
-    cabeceras = _cabeceras_para(campana)
+    cabeceras = cabeceras_para(campana)
     lineas = [";".join(cabeceras)]
     for registro in registros:
-        lineas.append(";".join(_valor_campo(registro, c) for c in cabeceras))
+        lineas.append(";".join(_valor_campo_csv(registro, c) for c in cabeceras))
     return "\n".join(lineas)
-
-
-def nombre_archivo_csv(campana: CampanaId, *, hoy: date) -> str:
-    """Nombre del fichero de salida: FiltradoCampana<ID>_<fecha ISO>.csv."""
-    return f"FiltradoCampana{campana.value}_{hoy.isoformat()}.csv"

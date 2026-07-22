@@ -7,6 +7,10 @@ ExcelFlick.xlsx
 # Carpeta temporal de inspección del repo remoto
 check-repo/
 
+# Artefactos temporales de sesiones con el MCP de Playwright (pueden
+# contener PII descargada durante pruebas, logs de consola, etc.)
+.playwright-mcp/
+
 # Python / Azure Functions
 __pycache__/
 *.pyc

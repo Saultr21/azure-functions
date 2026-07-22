@@ -2,7 +2,7 @@
 
 `function_app.py` lee BLOB_CONNECTION_STRING y BLOB_CONTAINER_NAME de
 os.environ (nunca hardcodeadas, ver local.settings.json.example). En los
-tests, `subir_csv_y_generar_link` se mockea, pero la lectura de estas
+tests, `subir_excel_y_generar_link` se mockea, pero la lectura de estas
 variables ocurre antes de esa llamada, así que necesitan existir en el
 entorno de test aunque su valor real no importe.
 """
