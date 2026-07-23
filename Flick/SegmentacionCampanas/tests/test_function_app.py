@@ -36,6 +36,7 @@ def test_ejecucion_correcta_devuelve_200_con_link(mock_ejecutar, mock_subir):
     mock_ejecutar.return_value = ResultadoCampana(
         total_clientes=3, csv_contenido="a;b\n1;2", excel_contenido=b"excel-fake",
         nombre_archivo="Filtrado.xlsx", municipios_no_reconocidos={"Agaete": 2},
+        municipios_no_reconocidos_total=2, municipios_no_reconocidos_resumen="Agaete: 2",
     )
 
     respuesta = segmentar_campana(_request(campana="3M", body=b"excel-binario"))
@@ -47,6 +48,8 @@ def test_ejecucion_correcta_devuelve_200_con_link(mock_ejecutar, mock_subir):
     assert cuerpo["nombre_archivo"] == "Filtrado.xlsx"
     assert cuerpo["csv_contenido"] == "a;b\n1;2"
     assert cuerpo["municipios_no_reconocidos"] == {"Agaete": 2}
+    assert cuerpo["municipios_no_reconocidos_total"] == 2
+    assert cuerpo["municipios_no_reconocidos_resumen"] == "Agaete: 2"
     # El Excel (no el CSV) es lo que se sube a Blob Storage para la descarga.
     assert mock_subir.call_args.kwargs["excel_contenido"] == b"excel-fake"
     assert mock_subir.call_args.kwargs["nombre_archivo"] == "Filtrado.xlsx"
@@ -73,6 +76,7 @@ def test_cero_resultados_no_sube_a_blob_y_devuelve_download_url_null(mock_ejecut
     mock_ejecutar.return_value = ResultadoCampana(
         total_clientes=0, csv_contenido="", excel_contenido=b"", nombre_archivo="x.xlsx",
         municipios_no_reconocidos={"Agaete": 1},
+        municipios_no_reconocidos_total=1, municipios_no_reconocidos_resumen="Agaete: 1",
     )
 
     respuesta = segmentar_campana(_request(campana="3M", body=b"excel-binario"))
@@ -83,6 +87,8 @@ def test_cero_resultados_no_sube_a_blob_y_devuelve_download_url_null(mock_ejecut
     assert cuerpo["download_url"] is None
     assert cuerpo["csv_contenido"] == ""
     assert cuerpo["municipios_no_reconocidos"] == {"Agaete": 1}
+    assert cuerpo["municipios_no_reconocidos_total"] == 1
+    assert cuerpo["municipios_no_reconocidos_resumen"] == "Agaete: 1"
     mock_subir.assert_not_called()
 
 
@@ -94,6 +100,7 @@ def test_error_al_subir_a_blob_devuelve_500(mock_ejecutar, mock_subir):
     mock_ejecutar.return_value = ResultadoCampana(
         total_clientes=3, csv_contenido="a;b\n1;2", excel_contenido=b"excel-fake",
         nombre_archivo="Filtrado.xlsx", municipios_no_reconocidos={},
+        municipios_no_reconocidos_total=0, municipios_no_reconocidos_resumen="",
     )
     mock_subir.side_effect = Exception("blob-boom")
 

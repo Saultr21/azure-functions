@@ -1,7 +1,12 @@
 from datetime import date
 
 from models import RegistroCliente
-from filtros_globales import cumple_filtros_globales, tiene_codigo_excluido, municipios_no_reconocidos
+from filtros_globales import (
+    cumple_filtros_globales,
+    tiene_codigo_excluido,
+    municipios_no_reconocidos,
+    resumen_municipios_no_reconocidos,
+)
 
 BASE = dict(
     matricula="1234ABC", descripcion="Yamaha NMAX 125", municipio="Telde",
@@ -69,3 +74,22 @@ def test_municipios_no_reconocidos_vacio_cuando_todo_es_valido():
 def test_municipios_no_reconocidos_agrupa_municipio_vacio():
     r = RegistroCliente(**{**BASE, "municipio": "  "})
     assert municipios_no_reconocidos([r]) == {"(vacío)": 1}
+
+
+def test_resumen_vacio_devuelve_cero_y_cadena_vacia():
+    assert resumen_municipios_no_reconocidos({}) == (0, "")
+
+
+def test_resumen_suma_total_y_formatea_detalle():
+    total, resumen = resumen_municipios_no_reconocidos({"Agaete": 906, "Mogán": 12})
+    assert total == 918
+    assert resumen == "Agaete: 906; Mogán: 12"
+
+
+def test_resumen_agrupa_los_que_superan_el_tope():
+    conteo = {f"Municipio{i}": (20 - i) for i in range(12)}  # 12 municipios, ordenados desc
+    total, resumen = resumen_municipios_no_reconocidos(conteo, tope=10)
+    assert total == sum(conteo.values())
+    # Muestra los 10 primeros y agrupa los 2 restantes.
+    assert resumen.endswith("; y 2 municipio(s) más")
+    assert resumen.count(":") == 10

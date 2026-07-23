@@ -46,6 +46,8 @@ def test_ejecutar_campana_3m_devuelve_registros_csv_y_excel():
 
     # Ningún municipio no reconocido en este Excel de prueba (Telde es válido).
     assert resultado.municipios_no_reconocidos == {}
+    assert resultado.municipios_no_reconocidos_total == 0
+    assert resultado.municipios_no_reconocidos_resumen == ""
 
 
 def test_ejecutar_campana_reporta_municipios_no_reconocidos():
@@ -68,6 +70,8 @@ def test_ejecutar_campana_reporta_municipios_no_reconocidos():
 
     assert resultado.total_clientes == 0
     assert resultado.municipios_no_reconocidos == {"Agaete": 1}
+    assert resultado.municipios_no_reconocidos_total == 1
+    assert resultado.municipios_no_reconocidos_resumen == "Agaete: 1"
 
 
 def test_campana_no_soportada_lanza_error():

@@ -95,3 +95,33 @@ def municipios_no_reconocidos(registros: list[RegistroCliente]) -> dict[str, int
         conteo[clave] = conteo.get(clave, 0) + 1
 
     return dict(sorted(conteo.items(), key=lambda item: (-item[1], item[0])))
+
+
+def resumen_municipios_no_reconocidos(
+    conteo: dict[str, int], *, tope: int = 10
+) -> tuple[int, str]:
+    """A partir del dict de `municipios_no_reconocidos`, devuelve el total y un
+    resumen de texto YA calculados en Python.
+
+    Se hace aquí, y no en el agente de Copilot Studio, porque los LLM no suman
+    de forma fiable decenas de enteros: si se le pide al modelo que calcule el
+    total a partir del JSON, el número sale distinto en cada ejecución. El
+    agente solo debe repetir estos valores verbatim, igual que hace con
+    `total_clientes`.
+
+    El resumen lista hasta `tope` municipios (el dict ya viene ordenado de mayor
+    a menor), y si hay más los agrega como "y N municipio(s) más".
+    """
+    total = sum(conteo.values())
+    if not conteo:
+        return 0, ""
+
+    items = list(conteo.items())
+    principales = items[:tope]
+    resumen = "; ".join(f"{municipio}: {n}" for municipio, n in principales)
+
+    restantes = len(items) - len(principales)
+    if restantes > 0:
+        resumen += f"; y {restantes} municipio(s) más"
+
+    return total, resumen

@@ -1,8 +1,8 @@
 # TODO — Flick: Motor de Segmentación con Azure Function
 
-> Last updated: 2026-07-22
-> Current phase: deployment (agente de Copilot Studio conectado, probado end-to-end con datos reales, mostrando resultados y avisos de municipios no reconocidos en el chat; pendiente validación manual de negocio, confirmar zona de servicio real y rotar la function key expuesta)
-> Overall progress: 15/15 tasks del plan + desplegado en Azure + agente de Copilot Studio conectado y probado end-to-end con resultados y avisos visibles en chat
+> Last updated: 2026-07-23
+> Current phase: deployment (agente de Copilot Studio conectado, evaluado formalmente y probado end-to-end; avisos de municipios ya deterministas; pendiente solo validación manual de negocio y confirmar la zona de servicio real)
+> Overall progress: 15/15 tasks del plan + desplegado en Azure + agente evaluado (pestaña Evaluar) y con el aviso de municipios corregido para ser fiable
 
 ## Completed
 
@@ -79,6 +79,21 @@
       (no antes) — bug real encontrado comparando contra el `.osts` de 24M.
     - Formato numérico del CSV corregido (evita sufijo `.0` en kilometrajes enteros).
 
+- [x] `TASK-030` — **Evaluación formal del agente (pestaña Evaluar) + pruebas de casos límite**
+  - Hecho el 2026-07-23 siguiendo el checklist oficial de Microsoft ([evaluation-checklist](https://learn.microsoft.com/en-us/microsoft-copilot-studio/guidance/evaluation-checklist)).
+  - Conjunto "Núcleo - 5 campañas (auto)": 10 conversaciones multi-turno auto-generadas (las 5 campañas × 2 redacciones, en inglés). Método "Calidad general" (juez LLM). Resultado: los primeros casos de las 5 campañas salieron **Aprobado** (la ejecución se quedó lenta/atascada hacia 5/10, pero ya cubría las 5 campañas; los 5 restantes eran duplicados de intención). Herramienta `generar_lista_campana` invocada en todos, respuesta en español pese a preguntar en inglés, tabla + total + archivo + enlace + manejo correcto del multi-turno (incluida la pregunta "¿y si no hay candidatos?").
+  - Casos límite probados a mano en vista previa (que el auto-set no cubría):
+    - Fuera de alcance ("¿qué tiempo hace hoy?") → **correcto**: rechaza y reconduce a las 5 campañas.
+    - Lenguaje natural sin código ("clientes que llevan más de dos años sin pasar por el taller") → **correcto**: mapea a 24M, llama a la herramienta, 546 candidatos.
+  - Único defecto encontrado: el aviso de municipios no reconocidos (ver `TASK-029`, ya resuelto).
+
+- [x] `TASK-029` — **Aviso de municipios no reconocidos fiable (conteo calculado en Python, no por el LLM)**
+  - Origen: evaluación + pruebas manuales de `TASK-030` (2026-07-23).
+  - Síntoma: sobre el MISMO dato (fijo para un Excel dado), el agente mostraba el aviso de 4 formas distintas: "4.029", "906", "5.134" y sin número. Causa: las Instrucciones pedían al LLM sumar los valores de un JSON, y los LLM no suman de forma fiable.
+  - Fix aplicado: nueva `resumen_municipios_no_reconocidos()` en `filtros_globales.py` que devuelve `(total, resumen)` ya calculados en Python (resumen = top-10 municipios `nombre: N; ...` + "y N municipio(s) más"). `ResultadoCampana` y la respuesta JSON de la Function exponen `municipios_no_reconocidos_total` y `municipios_no_reconocidos_resumen`. En el workflow, la salida antigua `municipios_no_reconocidos` (JSON) se reemplazó por `municipios_no_reconocidos_resumen` (Text) y se añadió `municipios_no_reconocidos_total` (Number). La Instrucción del agente ahora repite ambos valores VERBATIM (nunca los calcula).
+  - Verificado end-to-end: dos ejecuciones de la campaña 3M devuelven el MISMO aviso determinista ("se han excluido 4080 clientes... (vacío): 906; San Bartolomé De Tirajana: 219; ..."). 72 tests en verde. Function redesplegada; workflow y agente republicados.
+  - Efecto colateral útil para `TASK-027`: el detalle deja ver que hay ~206 variantes de municipio no reconocidas, muchas por mayúsculas/acentos del mismo pueblo (San Bartolomé/Santa Lucía de Tirajana aparecen 2-3 veces cada una) además de ruido de datos ("(vacío)": 906, "Taco": 117).
+
 ## Discovered / Backlog
 
 - [ ] `TASK-015` — **Validación manual contra producción (BLOQUEA el paso a producción)**
@@ -97,12 +112,6 @@
   - Origen: hallazgo durante la prueba end-to-end de TASK-026 (ver arriba) — 4.029 registros excluidos de la campaña 3M solo en la ejecución de prueba, muchos de municipios grandes del sur de Gran Canaria que no están en `MUNICIPIOS_VALIDOS`.
   - Prioridad: alta — podría significar que Flick está perdiendo un volumen grande de candidatos legítimos en las 5 campañas, o podría ser una exclusión de zona deliberada (p. ej. esos municipios los atiende otro concesionario Yamaha). Relacionado con `TASK-015` (validación manual de negocio).
   - Qué falta: preguntar a alguien de Flick que conozca el negocio si la lista de 13 municipios (`arucas, firgas, galdar, ingenio, moya, las palmas, santa brigida, guia, telde, teror, valleseco, valsequillo, vega de san mateo`) es la zona de servicio completa o si faltan municipios por añadir a `MUNICIPIOS_VALIDOS` en `filtros_globales.py`.
-
-- [ ] `TASK-023` — Rotar la function key expuesta durante TASK-016
-  - Origen: incidente de seguridad durante la sesión de integración con Copilot Studio (ver TASK-016 completada)
-  - Prioridad: media (antes de producción real con datos reales de Flick)
-  - Notas: `az functionapp function keys renew --name func-flick-segmentacion --resource-group flick-segmentacion-rg --function-name segmentar_campana --key-name default`,
-    luego actualizar el query param `code` en la acción HTTP del workflow `generar_lista_campana` en Copilot Studio (Configurar → Parámetros avanzados → Queries).
 
 - [ ] `TASK-022` — Migrar de Consumo Linux a Flex Consumption
   - Origen: aviso de Azure Portal (retirada de Consumo Linux, 30/09/2028)

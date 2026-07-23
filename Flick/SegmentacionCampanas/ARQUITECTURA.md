@@ -1,7 +1,6 @@
 # Arquitectura — Agente Campañas (Flick)
 
-> Documento de mantenimiento y replicación. Objetivo: que cualquier desarrollador
-> (o el propio Saúl dentro de 6 meses) pueda entender, mantener y **replicar este
+> Documento de mantenimiento y replicación. Objetivo: que cualquier desarrollador pueda entender, mantener y **replicar este
 > sistema completo para otro cliente** sin tener que reconstruir el contexto
 > desde cero.
 >
@@ -69,9 +68,15 @@ Respuesta 200 (éxito, con o sin candidatos):
   "download_url": "https://stflicksegcampanas.blob.core.windows.net/csv-campanas/FiltradoCampana3M_2026-07-22.xlsx?sv=...",
   "nombre_archivo": "FiltradoCampana3M_2026-07-22.xlsx",
   "csv_contenido": "Nº.matrícula;Descripción;...\n1234ABC;YAMAHA NMAX 125;...",
-  "municipios_no_reconocidos": {"San Bartolomé de Tirajana": 1200, "(vacío)": 340}
+  "municipios_no_reconocidos": {"(vacío)": 906, "San Bartolomé De Tirajana": 219, "...": 0},
+  "municipios_no_reconocidos_total": 4080,
+  "municipios_no_reconocidos_resumen": "(vacío): 906; San Bartolomé De Tirajana: 219; ...; y 196 municipio(s) más"
 }
 ```
+
+El dict crudo `municipios_no_reconocidos` se mantiene en el JSON para logging y
+depuración, pero el workflow y el agente usan solo `_total` y `_resumen` (ver
+sección 4.1 y `TASK-029`).
 
 Si `total_clientes` es 0, `download_url` y `nombre_archivo` son `null` y no se
 sube nada a Blob Storage (ver `function_app.py`).
@@ -196,7 +201,7 @@ ver `DEC-005` en `TODO.md`. Se edita en
    query `campana=<del trigger>` + `code=<function key>`, header
    `Content-Type: application/octet-stream`, body = contenido binario del
    OneDrive.
-4. **Respond to the agent** — 5 salidas tipadas que se devuelven al agente:
+4. **Respond to the agent** — 6 salidas tipadas que se devuelven al agente:
 
    | Salida | Tipo | Expresión |
    |---|---|---|
@@ -204,13 +209,20 @@ ver `DEC-005` en `TODO.md`. Se edita en
    | `download_url` | Text | `body('HTTP')?['download_url']` |
    | `csv_contenido` | Text | `body('HTTP')?['csv_contenido']` |
    | `nombre_archivo` | Text | `body('HTTP')?['nombre_archivo']` |
-   | `municipios_no_reconocidos` | Text | `string(body('HTTP')?['municipios_no_reconocidos'])` |
+   | `municipios_no_reconocidos_total` | Number | `body('HTTP')?['municipios_no_reconocidos_total']` |
+   | `municipios_no_reconocidos_resumen` | Text | `body('HTTP')?['municipios_no_reconocidos_resumen']` |
 
-   `municipios_no_reconocidos` se serializa explícitamente con `string(...)`
-   porque **Copilot Studio no tiene un tipo de salida Object/JSON** — solo
-   Text/Number/Yes-No/Date/Email/File. El agente recibe un string con forma de
-   JSON (`{"San Bartolomé de Tirajana": 1200}`) y lo interpreta él mismo desde
-   las Instrucciones.
+   **Importante (lección de la evaluación, ver `TASK-029` en `TODO.md`)**: el
+   total y el resumen de municipios no reconocidos se calculan en la Function
+   (Python) y se devuelven ya listos, NO como un JSON que el agente tenga que
+   sumar. Una versión anterior devolvía el dict crudo como un único Text
+   (`string(body('HTTP')?['municipios_no_reconocidos'])`) y pedía al agente que
+   calculara el total; el LLM sumaba mal decenas de enteros y el número salía
+   distinto en cada ejecución ("4.029", "906", "5.134", sin número...). La regla
+   general: si un valor tiene que ser exacto, calcúlalo en la Function y que el
+   agente solo lo repita verbatim — nunca dejes que el LLM haga aritmética.
+   Copilot Studio tampoco tiene tipo de salida Object/JSON (solo
+   Text/Number/Yes-No/Date/Email/File), lo que refuerza esta decisión.
 
 Requisito de configuración: el nodo "Respond to the agent" debe tener
 **Asynchronous response = Off** (en Networking) — hay un límite de 100
@@ -296,9 +308,10 @@ encontrada durante el desarrollo:
      usuario de mostrar TODO el PII en el chat porque el equipo que lo usa ya
      tiene acceso al Excel original, ver `TASK-024` en `TODO.md`).
    - Después de la tabla: total, nombre de archivo, enlace, en ese orden.
-   - **Si `municipios_no_reconocidos` no es `"{}"`**, añadir un aviso
-     `⚠️ Nota: se han excluido N clientes...` — es informativo, no cambia el
-     resultado (añadido en esta misma sesión, ver `TASK-026`).
+   - **Si `municipios_no_reconocidos_total` > 0**, añadir un aviso
+     `⚠️ Nota: se han excluido {total} clientes... (detalle: {resumen})`
+     repitiendo VERBATIM los campos `_total` y `_resumen` (nunca calcularlos).
+     Es informativo, no cambia el resultado (ver `TASK-026` y `TASK-029`).
 7. **Tono**: profesional, conciso, español.
 
 ### 5.5 Trampa al editar las Instrucciones con Playwright
