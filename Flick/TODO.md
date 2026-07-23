@@ -1,8 +1,8 @@
 # TODO — Flick: Motor de Segmentación con Azure Function
 
 > Last updated: 2026-07-23
-> Current phase: deployment (agente de Copilot Studio conectado, evaluado formalmente y probado end-to-end; avisos de municipios ya deterministas; pendiente solo validación manual de negocio y confirmar la zona de servicio real)
-> Overall progress: 15/15 tasks del plan + desplegado en Azure + agente evaluado (pestaña Evaluar) y con el aviso de municipios corregido para ser fiable
+> Current phase: deployment (agente de Copilot Studio conectado, evaluado formalmente y probado end-to-end; avisos de municipios ya deterministas; agente replicado y verificado también en el tenant de Cognitia; pendiente solo validación manual de negocio y confirmar la zona de servicio real)
+> Overall progress: 15/15 tasks del plan + desplegado en Azure + agente evaluado (pestaña Evaluar) y con el aviso de municipios corregido para ser fiable + exportado y verificado en el tenant de Cognitia (entorno "Cognitia DEV")
 
 ## Completed
 
@@ -93,6 +93,15 @@
   - Fix aplicado: nueva `resumen_municipios_no_reconocidos()` en `filtros_globales.py` que devuelve `(total, resumen)` ya calculados en Python (resumen = top-10 municipios `nombre: N; ...` + "y N municipio(s) más"). `ResultadoCampana` y la respuesta JSON de la Function exponen `municipios_no_reconocidos_total` y `municipios_no_reconocidos_resumen`. En el workflow, la salida antigua `municipios_no_reconocidos` (JSON) se reemplazó por `municipios_no_reconocidos_resumen` (Text) y se añadió `municipios_no_reconocidos_total` (Number). La Instrucción del agente ahora repite ambos valores VERBATIM (nunca los calcula).
   - Verificado end-to-end: dos ejecuciones de la campaña 3M devuelven el MISMO aviso determinista ("se han excluido 4080 clientes... (vacío): 906; San Bartolomé De Tirajana: 219; ..."). 72 tests en verde. Function redesplegada; workflow y agente republicados.
   - Efecto colateral útil para `TASK-027`: el detalle deja ver que hay ~206 variantes de municipio no reconocidas, muchas por mayúsculas/acentos del mismo pueblo (San Bartolomé/Santa Lucía de Tirajana aparecen 2-3 veces cada una) además de ruido de datos ("(vacío)": 906, "Taco": 117).
+
+- [x] `TASK-031` — **Exportar el agente al tenant de Cognitia (entorno "Cognitia DEV")**
+  - Origen: petición explícita del usuario para llevar el agente al tenant de CognitiaTech, reutilizando la misma Azure Function de Flick; el Excel maestro se subió a un sitio SharePoint de Cognitia ("Flickagente") en vez de a un OneDrive personal.
+  - Lado Flick: creada una solución no administrada en Copilot Studio con el agente "Agente Campañas" y sus dependencias (workflow `generar_lista_campana`, conexiones), exportada como `.zip`.
+  - Lado Cognitia: se detectó y eliminó (decisión del usuario) una solución "Agente flick" preexistente de 6 meses de antigüedad antes de importar, para evitar duplicados. Se creó un entorno dedicado **"Cognitia DEV"** (en vez de usar el entorno Default del tenant) para esta importación, siguiendo la práctica recomendada de no mezclar trabajo de desarrollo con el entorno compartido.
+  - Tras importar, la conexión del workflow al Excel quedó rota porque apuntaba al OneDrive de Flick (`sistemas3@grupoflick.onmicrosoft.com`), inexistente en Cognitia. Además, el Excel real vivía en un **sitio SharePoint** ("Flickagente" → Documentos compartidos → General), no en un OneDrive personal — el conector OneDrive no puede navegar bibliotecas de sitios SharePoint. Fix: se cambió el nodo "Obtener contenido de archivo" del workflow de conector OneDrive a conector **SharePoint**, apuntando a `https://cognitiatech.sharepoint.com/sites/Flickagente` → Documentos compartidos → General → `ExcelFlick.xlsx`.
+  - El Knowledge source del agente (`ExcelFlick.xlsx`) tenía el mismo problema (apuntaba a la URL de SharePoint de Flick) — se quitó y se volvió a añadir con el conector SharePoint de Cognitia, misma ruta que el workflow.
+  - Verificado end-to-end en vista previa dentro de Cognitia DEV: campaña 3M → 225 candidatos, tabla correcta, archivo `FiltradoCampana3M_2026-07-23.xlsx`, enlace de descarga apuntando a la misma Function/Blob Storage de Flick (`stflicksegcampanas.blob.core.windows.net`), y aviso de municipios no reconocidos con el total determinista **4080** (mismo valor que en Flick tras el fix de `TASK-029`) — confirma que ambos tenants comparten backend y que el fix de determinismo se replicó correctamente.
+  - Agente guardado y publicado con éxito en Cognitia DEV ("Agent published successfully").
 
 ## Discovered / Backlog
 
